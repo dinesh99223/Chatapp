@@ -10,7 +10,7 @@ const router = express.Router();
 
 
 router.route("/register").post(registerUser)
-router.route("/")get(protect, allUsers);
+router.route("/").get(protect, allUsers);
 router.route("/login").post(login);
 
 
