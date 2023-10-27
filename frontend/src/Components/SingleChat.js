@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ChatState } from "../Context/ChatProvider";
 import {
+  Button,
   FormControl,
   IconButton,
   Input,
@@ -17,10 +18,9 @@ import "./styles.css";
 import ScrollableChat from "./ScrollableChat";
 import io from "socket.io-client";
 import Lottie from "react-lottie";
-import animationData from '../animations/typing.json'
+import animationData from "../animations/typing.json";
 
-// const ENDPOINT = "http://localhost:5000";
-const ENDPOINT = "https://talk-a-tive-7q6s.onrender.com"
+const ENDPOINT = "http://localhost:5000";
 var socket, selectedChatCompare;
 
 const SingleChat = ({ fetchAgain, setFetchAgain }) => {
@@ -40,10 +40,11 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     },
   };
 
-  const { user, selectedChat, setSelectedChat, notification, setNotification } = ChatState();
+  const { user, selectedChat, setSelectedChat, notification, setNotification } =
+    ChatState();
   const toast = useToast();
 
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     if (!selectedChat) return;
 
     try {
@@ -73,7 +74,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
         position: "bottom",
       });
     }
-  };
+  });
 
   useEffect(() => {
     socket = io(ENDPOINT);
@@ -88,7 +89,6 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     selectedChatCompare = selectedChat;
   }, [selectedChat]);
 
-
   useEffect(() => {
     socket.on("message received", (newMessageReceived) => {
       if (
@@ -96,11 +96,10 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
         selectedChatCompare._id !== newMessageReceived.chat._id
       ) {
         // give notification
-        if(!notification.includes(newMessageReceived)){
-          setNotification([newMessageReceived,...notification]);
+        if (!notification.includes(newMessageReceived)) {
+          setNotification([newMessageReceived, ...notification]);
           setFetchAgain(!fetchAgain);
         }
-
       } else {
         setMessages([...messages, newMessageReceived]);
       }
@@ -110,6 +109,43 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
 
   const sendMessage = async (event) => {
     if (event.key === "Enter" && newMessage) {
+      socket.emit("stop typing", selectedChat._id);
+      try {
+        const config = {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user.token}`,
+          },
+        };
+
+        setNewMessage("");
+        const { data } = await axios.post(
+          "/api/chat/message",
+          {
+            content: newMessage,
+            chatId: selectedChat._id,
+          },
+          config
+        );
+
+        console.log(data);
+        socket.emit("new message", data);
+        setMessages([...messages, data]);
+      } catch (error) {
+        toast({
+          title: "Error Occured!",
+          description: "Failed to send the message",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+          position: "bottom",
+        });
+      }
+    }
+  };
+
+  const sendMessageOnClick = async () => {
+    if (newMessage) {
       socket.emit("stop typing", selectedChat._id);
       try {
         const config = {
@@ -230,26 +266,37 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
               </div>
             )}
 
-            <FormControl onKeyDown={sendMessage} isRequired mt={3}>
-              {isTyping ? (
-                <div>
-                  <Lottie
-                    options={defaultOptions}
-                    width={70}
-                    style={{ marginBottom: 15, marginLeft: 0 }}
-                  />
-                </div>
-              ) : (
-                <></>
-              )}
-              <Input
-                variant={"filled"}
-                bg={"#E0E0E0"}
-                placeholder="Enter a message"
-                onChange={typingHandler}
-                value={newMessage}
-              />
-            </FormControl>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <FormControl onKeyDown={sendMessage} isRequired mt={3}>
+                {isTyping ? (
+                  <div>
+                    <Lottie
+                      options={defaultOptions}
+                      width={70}
+                      style={{ marginBottom: 15, marginLeft: 0 }}
+                    />
+                  </div>
+                ) : (
+                  <></>
+                )}
+                <Input
+                  variant={"filled"}
+                  bg={"#E0E0E0"}
+                  placeholder="Enter a message"
+                  onChange={typingHandler}
+                  value={newMessage}
+                />
+              </FormControl>
+              <Button
+                colorScheme="teal"
+                bg={"#4299E1"}
+                variant="solid"
+                style={{ marginLeft: 8, marginTop: 10 }}
+                onClick={sendMessageOnClick}
+              >
+                Send
+              </Button>
+            </div>
           </Box>
         </>
       ) : (
